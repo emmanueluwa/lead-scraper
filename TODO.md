@@ -1,0 +1,4 @@
+- set up project
+- install packages needed
+- set up file structure
+- create classes (map out functions needed)
