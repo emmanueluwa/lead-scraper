@@ -38,7 +38,47 @@ async function run() {
       document.querySelectorAll("a.yYlJEf.Q7PwXb.L48Cpd.brKmxb")
     ).map((value) => value.href);
   });
-  console.log(urlCorpus);
+  console.log("urls", urlCorpus);
+
+  //   {
+  //     url: "",
+  //     email: "",
+  //   }
+
+  for (let url of urlCorpus) {
+    try {
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+
+      //   await page.waitForTimeout(3000);
+
+      const mailtos = await page.$$eval('a[href^="mailto:"]', (as) =>
+        as.map((a) => a.href.replace(/^mailto:/, "").split("?")[0])
+      );
+
+      const visibleText = await page.evaluate(() => document.body.innerText);
+      const html = await page.content();
+
+      function extractEmails(str) {
+        if (!str) return [];
+        const matches = str.match(
+          /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
+        );
+
+        return matches ? Array.from(new Set(matches)) : [];
+      }
+
+      const emailsFromText = extractEmails(visibleText);
+      const emailsFromHTML = extractEmails(html);
+
+      const emails = Array.from(
+        new Set([...mailtos, ...emailsFromText, ...emailsFromHTML])
+      );
+
+      console.log(emails);
+    } catch (err) {
+      console.error(`Error processing ${url}`, err.message);
+    }
+  }
 }
 
 run();
