@@ -1,5 +1,32 @@
 const puppeteer = require("puppeteer");
 const fs = require("fs");
+const { google } = require("googleapis");
+require("dotenv").config();
+
+//google sheets credentials
+const credentials = require("./percy/company-scraper-serviced-account.json");
+
+//google sheets setup
+const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
+const auth = new google.auth.GoogleAuth({
+  credentials,
+  scopes: SCOPES,
+});
+
+const sheets = google.sheets({ version: "v4", auth });
+const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID;
+
+async function appendToSheet(data) {
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SPREADSHEET_ID,
+    range: "BIRDSX", //tabname
+    valueInputOption: "RAW",
+    insertDataOption: "INSERT_ROWS",
+    resource: {
+      values: data,
+    },
+  });
+}
 
 const sleep = (milliseconds) => {
   return new Promise((resolve) => {
@@ -26,10 +53,11 @@ const setupBrowser = async () => {
 
 emailData = [];
 
+const URL =
+  "https://www.google.com/search?q=civil+engineering+companies+in+birmingham&sca_esv=e4a529db535589d2&biw=1700&bih=855&tbm=lcl&sxsrf=AHTn8zqiqRHiHz8OUeXnTRoZHTs2Qa0D5w%3A1746586998140&ei=ds0aaIGpCN2AhbIP4KSD0Ak&oq=civil+engineering+companies+in+&gs_lp=Eg1nd3Mtd2l6LWxvY2FsIh9jaXZpbCBlbmdpbmVlcmluZyBjb21wYW5pZXMgaW4gKgIIAzIEECMYJzILEAAYgAQYkQIYigUyCxAAGIAEGJECGIoFMgsQABiABBiRAhiKBTILEAAYgAQYkQIYigUyBRAAGIAEMgUQABiABDIFEAAYgAQyBRAAGIAEMgUQABiABEi1YVCnBlinBnAAeACQAQCYAVWgAcoBqgEBM7gBAcgBAPgBAZgCA6ACiQLCAgsQABiABBiGAxiKBcICCBAAGIAEGKIEwgIGEAAYFhgemAMAiAYBkgcDMi4xoAe_ErIHAzIuMbgHiQI&sclient=gws-wiz-local#rlfi=hd:;si:;mv:[[52.5587098,-1.8308978000000002],[52.408877499999996,-1.9729356999999998]];tbs:lrf:!1m4!1u3!2m2!3m1!1e1!1m4!1u2!2m2!2m1!1e1!2m1!1e2!2m1!1e3!3sIAE,lf:1,lf_ui:2";
+
 async function getBusinessDataFromPage(page) {
-  await page.goto(
-    "https://www.google.com/search?sca_esv=e95a676e342dd0a3&tbm=lcl&sxsrf=AHTn8zp8q0byutra5CI4VHcQUglDW8-40A:1746511227050&q=civil+engineering+companies+near+me&rflfq=1&num=10&sa=X&ved=2ahUKEwiImqOqlY6NAxVxQEEAHa-BCvIQjGp6BAgiEAE&biw=1700&bih=855&dpr=1.09#rlfi=hd:;si:9517394829108428102,l,CiNjaXZpbCBlbmdpbmVlcmluZyBjb21wYW5pZXMgbmVhciBtZSIDkAEBSLbT2dGVuoCACFotEAAQARACGAEiI2NpdmlsIGVuZ2luZWVyaW5nIGNvbXBhbmllcyBuZWFyIG1lkgETc3RydWN0dXJhbF9lbmdpbmVlcpoBJENoZERTVWhOTUc5blMwVkpRMEZuU1VSR2FITlRaM3BSUlJBQqoBbRABKh8iG2NpdmlsIGVuZ2luZWVyaW5nIGNvbXBhbmllcygAMh8QASIbReBZXwL3yU7oLakEUJ6O6Cdrx5cigX_1DzO9MicQAiIjY2l2aWwgZW5naW5lZXJpbmcgY29tcGFuaWVzIG5lYXIgbWX6AQQIABA9;mv:[[51.5974315,0.43128059999999996],[51.2783186,-0.12856779999999998]]"
-  );
+  await page.goto(URL);
 
   await page.waitForSelector("span.UywwFc-RLmnJb");
   await page.click("span.UywwFc-RLmnJb");
@@ -39,10 +67,9 @@ async function getBusinessDataFromPage(page) {
   let pageIndex = 1;
   while (nextPagePresent) {
     console.log("getting company urls from page: ", pageIndex);
+    await sleep(2000);
 
     await page.waitForSelector("a.yYlJEf.Q7PwXb.L48Cpd.brKmxb");
-
-    await sleep(2000);
 
     const urls = await page.evaluate((e) => {
       return Array.from(
@@ -152,12 +179,17 @@ async function run() {
   const allEmailData = await getBusinessDataFromPage(page);
   console.log("final email data: ", allEmailData);
 
-  fs.writeFileSync(
-    "scraped-company-data.json",
-    JSON.stringify(allEmailData),
-    "utf-8"
-  );
+  // fs.writeFileSync(
+  //   "scraped-company-data.json",
+  //   JSON.stringify(allEmailData),
+  //   "utf-8"
+  // );
 
+  //extracting to google sheets
+  const rows = allEmailData.map((entry) => [entry.url, entry.emails.join(",")]);
+  await appendToSheet(rows);
+
+  console.log("data submitted to google sheets :)");
   await browser.close();
 }
 
